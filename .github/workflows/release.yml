@@ -1,61 +1,59 @@
-name: Release Build
+name: Release Build (debug)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [LastChat]
+    paths: [".github/workflows/release.yml", "app/**", "web-ui/**"]
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: web-ui/package-lock.json
 
-      - name: Install web UI dependencies
+      - name: Web UI deps
         working-directory: web-ui
         run: npm ci
 
-      - name: Gradle cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+      - uses: gradle/actions/setup-gradle@v4
 
-      - name: Prepare build files
+      - name: Build debug APK
+        run: gradle :app:assembleStableDebug --no-daemon -Plastchat.abi.splits=false
+
+      - name: Collect APK
         run: |
-          # 解码base64编码的keystore文件
-          echo "${{ secrets.KEY_BASE64 }}" | base64 -d > app/app.key
-          
-          # 写入签名配置到local.properties
-          echo "${{ secrets.SIGNING_CONFIG }}" > local.properties
-          
-          # 写入Google Services配置
-          echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+          mkdir -p dist
+          find app/build/outputs/apk -name "*.apk" -exec cp {} dist/ \;
+          cd dist
+          for f in *.apk; do mv "$f" "LastNap_1.4.8_debug.apk"; done
+          ls -la
 
-      - name: Gradle Build
+      - name: Tag
         run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
+          git config user.name "LastNap Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git tag -f v1.4.8-lastnap
+          git push origin v1.4.8-lastnap -f
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        if: success()
+      - uses: softprops/action-gh-release@v2
         with:
-          name: artifacts
-          path: app/build/outputs/apk/**/*.apk
+          tag_name: v1.4.8-lastnap
+          name: LastNap 1.4.8 (debug)
+          files: dist/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
