@@ -1,7 +1,8 @@
+import glob
 import os
 from PIL import Image, ImageDraw, ImageOps
 
-SRC = ".github/branding/source.jpg"
+SRC = sorted(glob.glob(".github/branding/*.jpg"))[0]
 RES = "app/src/main/res"
 
 im = Image.open(SRC).convert("RGB")
@@ -39,4 +40,4 @@ for dpi, s in SIZES.items():
 
 with_bg(512, 1.0).save(os.path.join(RES, "playstore-icon.png"))
 with_bg(512, 1.0).save(os.path.join(RES, "ic_launcher-web.png"))
-print("icons generated, bg =", bg)
+print("icons generated from", SRC, "bg =", bg)
