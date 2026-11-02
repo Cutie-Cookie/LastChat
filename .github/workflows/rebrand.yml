@@ -1,0 +1,36 @@
+name: Rebrand LastNap
+
+on:
+  workflow_dispatch:
+  push:
+    paths: [".github/branding/**"]
+
+permissions:
+  contents: write
+
+jobs:
+  rebrand:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate icons from source.jpg
+        run: pip install pillow && python .github/branding/make_icons.py
+
+      - name: Rename app to LastNap
+        run: |
+          find app/src/main/res -name strings.xml -exec sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">LastNap</string>|' {} +
+          sed -i 's/val apkName = "LastChat_/val apkName = "LastNap_/' app/build.gradle.kts
+          grep -n "apkName" app/build.gradle.kts | head -3
+
+      - name: Commit rebrand
+        run: |
+          git config user.name "LastNap Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A app/src/main/res app/build.gradle.kts
+          git commit -m "Rebrand: LastNap (icon + name)" || echo "nothing to commit"
+          git push
