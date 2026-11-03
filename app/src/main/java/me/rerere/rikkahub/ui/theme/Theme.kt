@@ -13,11 +13,14 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.view.WindowCompat
 import kotlinx.serialization.Serializable
@@ -83,11 +86,19 @@ fun RikkahubTheme(
         }
     }
 
-    CompositionLocalProvider(
-        LocalLayoutDirection provides LayoutDirection.Ltr,
-        LocalDarkMode provides darkTheme,
-        LocalExtendColors provides extendColors
-    ) {
+        // Global UI scale: shrink or enlarge the entire interface (buttons, spacing, text)
+        val uiScale = settings.displaySetting.uiScale
+        val baseDensity = LocalDensity.current
+        val scaledDensity = remember(uiScale, baseDensity) {
+            Density(baseDensity.density * uiScale, baseDensity.fontScale)
+        }
+
+        CompositionLocalProvider(
+            LocalLayoutDirection provides LayoutDirection.Ltr,
+            LocalDarkMode provides darkTheme,
+            LocalExtendColors provides extendColors,
+            LocalDensity provides scaledDensity
+        ) {
         // Create typography from font settings
         val fontSettings = me.rerere.rikkahub.ui.hooks.rememberFontSettings()
         val typography = rememberTypographyFromFontSettings(fontSettings)

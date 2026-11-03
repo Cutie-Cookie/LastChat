@@ -334,6 +334,43 @@ fun SettingUICustomizationPage(vm: SettingVM = koinViewModel()) {
                 }
             }
 
+            // Global UI Scale (whole interface size)
+            item {
+                SettingsGroup(
+                    title = stringResource(R.string.setting_ui_scale_title)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(stringResource(R.string.setting_ui_scale_small))
+                        Slider(
+                            value = displaySetting.uiScale,
+                            onValueChange = {
+                                updateDisplaySetting(displaySetting.copy(uiScale = it))
+                            },
+                            valueRange = 0.7f..1.2f,
+                            steps = 9,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(stringResource(R.string.setting_ui_scale_large))
+                    }
+                    Text(
+                        text = stringResource(R.string.setting_ui_scale_value, (displaySetting.uiScale * 100).toInt()),
+                        style = LocalTextStyle.current,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.setting_ui_scale_desc),
+                        style = LocalTextStyle.current,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
             // Font Size Slider
             item {
                 SettingsGroup(

@@ -1362,6 +1362,11 @@
     
     <!-- UI Customization -->
     <string name="setting_ui_customization_title">UI Customization</string>
+    <string name="setting_ui_scale_title">UI Scale</string>
+    <string name="setting_ui_scale_small">Small</string>
+    <string name="setting_ui_scale_large">Default</string>
+    <string name="setting_ui_scale_value">Current: %1$d%%</string>
+    <string name="setting_ui_scale_desc">Makes the whole interface smaller or bigger — buttons, spacing, text. 100%% is the app default.</string>
     
     <!-- Minimal Input Picker -->
     <string name="minimal_input_camera">Camera</string>
