@@ -41,6 +41,8 @@
     <string name="setting_display_ui_customization_desc">Chat display, haptics, code blocks, font size and more</string>
     <string name="setting_display_check_updates_title">Check for Updates</string>
     <string name="setting_display_check_updates_desc">Automatically check GitHub for new app versions</string>
+    <string name="setting_display_model_sees_generated_images_title">Model Sees Generated Images</string>
+    <string name="setting_display_model_sees_generated_images_desc">Let the chat model visually inspect images it generates via the image tool. Non-vision models get OCR text instead (silent, like uploaded images). Counts toward the model\'s image limit.</string>
     <string name="setting_display_advanced">Advanced</string>
     <string name="setting_display_rp_optimizations_desc">Custom text styling for roleplay patterns</string>
 

@@ -241,6 +241,18 @@ fun SettingDisplayPage(vm: SettingVM = koinViewModel()) {
                             )
                         }
                     )
+                    SettingGroupItem(
+                        title = stringResource(R.string.setting_display_model_sees_generated_images_title),
+                        subtitle = stringResource(R.string.setting_display_model_sees_generated_images_desc),
+                        trailing = {
+                            HapticSwitch(
+                                checked = displaySetting.modelSeesGeneratedImages,
+                                onCheckedChange = {
+                                    updateDisplaySetting(displaySetting.copy(modelSeesGeneratedImages = it))
+                                }
+                            )
+                        }
+                    )
                     SettingGroupInputItem(
                         title = stringResource(R.string.setting_display_model_catalog_title),
                         subtitle = buildModelCatalogSubtitle(context, modelCatalogStatus),

@@ -257,6 +257,7 @@ data class DisplaySetting(
     val chatToolbarAtBottom: Boolean = false,
     val sttReplaceModelIcon: Boolean = false,
     val uiScale: Float = 1.0f,
+    val modelSeesGeneratedImages: Boolean = false,
 )
 
 internal fun DisplaySetting.normalizeFontSettings(): DisplaySetting {

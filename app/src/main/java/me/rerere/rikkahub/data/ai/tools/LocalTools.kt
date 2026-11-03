@@ -30,9 +30,13 @@ import me.rerere.ai.provider.ProviderManager
 import me.rerere.ai.core.InputSchema
 import me.rerere.ai.core.Tool
 import me.rerere.ai.core.ToolApprovalMode
+import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.findProvider
+import me.rerere.rikkahub.data.ai.TOOL_RESULT_INJECT_USER_IMAGE_PARTS_KEY
+import me.rerere.rikkahub.data.ai.transformers.OcrTransformer
+import me.rerere.rikkahub.data.ai.transformers.isOcrConfigured
 import me.rerere.rikkahub.data.repository.GenMediaRepository
 import me.rerere.rikkahub.data.datastore.TtsFilterMode
 import me.rerere.rikkahub.data.datastore.getEffectiveTTSProvider
@@ -550,6 +554,88 @@ class LocalTools(
                     )
                 }
 
+                // Optional: let the chat model visually inspect the generated image(s).
+                // - Vision models: image injected as private tool inspection (like look_at_screen),
+                //   counted by the model's adaptive image limit.
+                // - Non-vision models: silent OCR fallback (like user-sent images on non-vision
+                //   models), only when an OCR model is configured.
+                val injectImages = settingsStore.settingsFlow.value.displaySetting
+                    .modelSeesGeneratedImages
+                if (injectImages && modelSupportsVision) {
+                    val injected = files.mapIndexed { index, file ->
+                        buildJsonObject {
+                            put("data_url", JsonPrimitive(file.uri))
+                            put("mime_type", JsonPrimitive("image/png"))
+                            put("title", JsonPrimitive("Generated image ${index + 1}"))
+                            put("markdown_image", JsonPrimitive(file.markdownImage))
+                            put("origin_tool", JsonPrimitive("generate_image"))
+                        }
+                    }
+                    return@Tool buildJsonObject {
+                        put("success", true)
+                        put("saved_to_gallery", true)
+                        put(
+                            "images",
+                            JsonArray(
+                                files.map { file ->
+                                    buildJsonObject {
+                                        put("uri", file.uri)
+                                        put("path", file.path)
+                                        put("markdown_image", file.markdownImage)
+                                    }
+                                }
+                            )
+                        )
+                        put("note", "Include images[].markdown_image in your reply so the generated image appears in chat. The generated image is also attached below for your own visual inspection — the user cannot see the attached copy.")
+                        put(
+                            TOOL_RESULT_INJECT_USER_IMAGE_PARTS_KEY,
+                            JsonArray(injected),
+                        )
+                    }
+                }
+                if (injectImages && !modelSupportsVision && isOcrConfigured(settingsStore.settingsFlow.value)) {
+                    // Silent OCR fallback: run the configured OCR model over each generated
+                    // image and hand the text to the chat model. Failures stay silent — the
+                    // tool result simply omits the OCR block (same behavior as user images
+                    // when OCR fails).
+                    val ocrEntries = files.mapIndexed { index, file ->
+                        val ocrText = runCatching {
+                            OcrTransformer.performOcrWithMetadata(
+                                part = UIMessagePart.Image(url = file.uri),
+                            ).promptText
+                        }.getOrNull().orEmpty()
+                        buildJsonObject {
+                            put("index", JsonPrimitive(index + 1))
+                            put("markdown_image", JsonPrimitive(file.markdownImage))
+                            if (ocrText.isNotBlank()) {
+                                put("ocr_text", JsonPrimitive(ocrText))
+                            }
+                        }
+                    }
+                    val anyOcr = ocrEntries.any { it.containsKey("ocr_text") }
+                    return@Tool buildJsonObject {
+                        put("success", true)
+                        put("saved_to_gallery", true)
+                        put(
+                            "images",
+                            JsonArray(
+                                files.map { file ->
+                                    buildJsonObject {
+                                        put("uri", file.uri)
+                                        put("path", file.path)
+                                        put("markdown_image", file.markdownImage)
+                                    }
+                                }
+                            )
+                        )
+                        if (anyOcr) {
+                            put("generated_image_ocr", JsonArray(ocrEntries))
+                            put("note", "Include images[].markdown_image in your reply so the generated image appears in chat. generated_image_ocr[] contains the OCR text of each generated image (this model cannot view images directly).")
+                        } else {
+                            put("note", "Include images[].markdown_image in your reply so the generated image appears in chat.")
+                        }
+                    }
+                }
                 buildJsonObject {
                     put("success", true)
                     put("saved_to_gallery", true)
@@ -701,6 +787,7 @@ class LocalTools(
         options: List<LocalToolOption>,
         assistantId: Uuid,
         conversationId: Uuid,
+        modelSupportsVision: Boolean = true,
     ): List<Tool> {
         val tools = mutableListOf<Tool>()
         if (options.contains(LocalToolOption.JavascriptEngine)) {

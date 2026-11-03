@@ -1938,6 +1938,7 @@ class ChatService(
                     options = assistant.localTools,
                     assistantId = assistant.id,
                     conversationId = conversation.id,
+                    modelSupportsVision = model.inputModalities.contains(Modality.IMAGE),
                 )
             )
 
