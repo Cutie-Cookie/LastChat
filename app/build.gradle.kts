@@ -85,7 +85,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            // LastNap ships arm64-only: smaller APK, less RAM pressure, faster startup.
+            // (Full upstream multi-ABI matrix restored by changing this line.)
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
