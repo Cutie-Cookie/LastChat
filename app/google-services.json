@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:0:android:0000000000000000000000",
+        "mobilesdk_app_id": "1:0:android:000000000000000000000000",
         "android_client_info": {
-          "package_name": "lastchat.rikkafork.cocolal"
+          "package_name": "dev.keepinitkrispy.lastnap"
         }
       },
       "oauth_client": [],
@@ -26,9 +26,28 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:0:android:0000000000000000000001",
+        "mobilesdk_app_id": "1:0:android:000000000000000000000001",
         "android_client_info": {
-          "package_name": "lastchat.rikkafork.cocolal.dev"
+          "package_name": "dev.keepinitkrispy.lastnap.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUMMY-KEY-000000000000000000000"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:0:android:000000000000000000000002",
+        "android_client_info": {
+          "package_name": "dev.keepinitkrispy.lastnap.debug"
         }
       },
       "oauth_client": [],
