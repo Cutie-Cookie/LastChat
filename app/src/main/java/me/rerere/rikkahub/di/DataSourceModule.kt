@@ -10,6 +10,7 @@ import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
+import coil3.gif.GifDecoder
 import coil3.svg.SvgDecoder
 import io.ktor.http.HttpHeaders
 import io.ktor.client.HttpClient
@@ -393,6 +394,7 @@ val dataSourceModule = module {
                 .components {
                     add(HttpUrlImageInterceptor())
                     add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient }))
+                    add(GifDecoder.Factory())
                     add(SvgDecoder.Factory(scaleToDensity = true))
                 }
                 .build()
