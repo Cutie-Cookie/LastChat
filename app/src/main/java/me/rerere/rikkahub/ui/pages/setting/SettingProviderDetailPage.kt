@@ -663,7 +663,8 @@ fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                     page == 2 -> {
                         SettingProviderProxyPage(
                             provider = provider,
-                            onEdit = onEdit
+                            onEdit = onEdit,
+                            contentPadding = contentPadding
                         )
                     }
                 }
@@ -1127,7 +1128,7 @@ private fun ModelList(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(16.dp),
+                .padding(end = 16.dp, bottom = 112.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

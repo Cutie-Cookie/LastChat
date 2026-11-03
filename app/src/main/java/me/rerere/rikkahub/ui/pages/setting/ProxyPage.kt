@@ -2,6 +2,7 @@ package me.rerere.rikkahub.ui.pages.setting
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,6 +53,7 @@ import org.koin.compose.koinInject
 internal fun SettingProviderProxyPage(
     provider: ProviderSetting,
     onEdit: (ProviderSetting) -> Unit,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     val scope = rememberCoroutineScope()
     val httpClient = koinInject<PlatformHttpClient>()
@@ -87,7 +89,8 @@ internal fun SettingProviderProxyPage(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 80.dp)
+            .padding(contentPadding)
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 120.dp)
     ) {
         Card(
             shape = me.rerere.rikkahub.ui.theme.AppShapes.CardLarge,
