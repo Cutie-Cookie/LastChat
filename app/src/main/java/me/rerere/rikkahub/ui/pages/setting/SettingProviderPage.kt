@@ -304,36 +304,34 @@ fun SettingProviderPage(
                     }
                 }
             ) {
-                if (useWideLayout) {
-                    when (currentTab) {
-                        ProvidersTab.Models -> ImportProviderButton(
-                            asFab = true,
-                            enableHaptics = settings.displaySetting.enableUIHaptics,
-                            onAdd = { addProvider(it) }
-                        )
+                when (currentTab) {
+                    ProvidersTab.Models -> ImportProviderButton(
+                        asFab = true,
+                        enableHaptics = settings.displaySetting.enableUIHaptics,
+                        onAdd = { addProvider(it) }
+                    )
 
-                        ProvidersTab.Search,
-                        ProvidersTab.Tts -> FloatingActionButton(
-                            onClick = {
-                                haptics.perform(HapticPattern.Pop)
-                                if (currentTab == ProvidersTab.Search) {
-                                    showSearchCommonOptions = true
-                                } else {
-                                    showTtsFilterSettings = true
-                                }
-                            },
-                            shape = AppShapes.CardLarge,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ) {
-                            Icon(
-                                Icons.Rounded.Settings,
-                                contentDescription = when (currentTab) {
-                                    ProvidersTab.Search -> stringResource(R.string.setting_page_search_common_options)
-                                    else -> stringResource(R.string.setting_tts_settings_title)
-                                }
-                            )
-                        }
+                    ProvidersTab.Search,
+                    ProvidersTab.Tts -> FloatingActionButton(
+                        onClick = {
+                            haptics.perform(HapticPattern.Pop)
+                            if (currentTab == ProvidersTab.Search) {
+                                showSearchCommonOptions = true
+                            } else {
+                                showTtsFilterSettings = true
+                            }
+                        },
+                        shape = AppShapes.CardLarge,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ) {
+                        Icon(
+                            Icons.Rounded.Settings,
+                            contentDescription = when (currentTab) {
+                                ProvidersTab.Search -> stringResource(R.string.setting_page_search_common_options)
+                                else -> stringResource(R.string.setting_tts_settings_title)
+                            }
+                        )
                     }
                 }
                 when (currentTab) {
@@ -480,56 +478,10 @@ fun SettingProviderPage(
                     },
                 )
             }
-                    }
-                    if (!useWideLayout) {
-                        ProvidersSecondaryActionSlot(modifier = Modifier.fillMaxSize()) {
-                            ImportProviderButton(
-                                asFab = true,
-                                enableHaptics = settings.displaySetting.enableUIHaptics,
-                                onAdd = { addProvider(it) }
-                            )
-                        }
-                    }
                 }
 
                 ProvidersTab.Search -> SearchProvidersContent(vm = vm, contentPadding = innerPadding)
                 ProvidersTab.Tts -> TtsProvidersContent(vm = vm, contentPadding = innerPadding)
-            }
-        }
-            AnimatedVisibility(
-                visible = !useWideLayout && (currentTab == ProvidersTab.Search || currentTab == ProvidersTab.Tts),
-                enter = slideInHorizontally(
-                    animationSpec = tween(120),
-                    initialOffsetX = { it }
-                ) + fadeIn(animationSpec = tween(90)),
-                exit = slideOutHorizontally(
-                    animationSpec = tween(120),
-                    targetOffsetX = { it }
-                ) + fadeOut(animationSpec = tween(70))
-            ) {
-                ProvidersSecondaryActionSlot(modifier = Modifier.fillMaxSize()) {
-                    FloatingActionButton(
-                        onClick = {
-                            haptics.perform(HapticPattern.Pop)
-                            if (currentTab == ProvidersTab.Search) {
-                                showSearchCommonOptions = true
-                            } else {
-                                showTtsFilterSettings = true
-                            }
-                        },
-                        shape = AppShapes.CardLarge,
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    ) {
-                        Icon(
-                            Icons.Rounded.Settings,
-                            contentDescription = when (currentTab) {
-                                ProvidersTab.Search -> stringResource(R.string.setting_page_search_common_options)
-                                else -> stringResource(R.string.setting_tts_settings_title)
-                            }
-                        )
-                    }
-                }
             }
         }
     }

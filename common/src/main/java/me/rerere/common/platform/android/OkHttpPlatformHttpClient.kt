@@ -74,13 +74,14 @@ class OkHttpPlatformHttpClient(
 
     private fun PlatformHttpRequest.client(): OkHttpClient {
         val proxyConfig = proxy ?: return client
-        val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyConfig.host, proxyConfig.port))
+        val proxyType = if (proxyConfig.type.equals("socks5", ignoreCase = true)) Proxy.Type.SOCKS else Proxy.Type.HTTP
+        val proxy = Proxy(proxyType, InetSocketAddress(proxyConfig.host, proxyConfig.port))
         val username = proxyConfig.username
         val password = proxyConfig.password
         return client.newBuilder()
             .proxy(proxy)
             .apply {
-                if (!username.isNullOrEmpty() && !password.isNullOrEmpty()) {
+                if (proxyType == Proxy.Type.HTTP && !username.isNullOrEmpty() && !password.isNullOrEmpty()) {
                     proxyAuthenticator { _: Route?, response: Response ->
                         response.request.newBuilder()
                             .header(

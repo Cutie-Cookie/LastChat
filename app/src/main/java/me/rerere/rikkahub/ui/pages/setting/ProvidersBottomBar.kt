@@ -77,27 +77,3 @@ fun ProvidersBottomBar(
         actions = actions,
     )
 }
-
-@Composable
-fun ProvidersSecondaryActionSlot(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val useWideLayout = LocalSettingsWideLayout.current
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 16.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = if (useWideLayout) 0.dp else 82.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            content()
-        }
-    }
-}

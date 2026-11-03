@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,7 +48,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
 import androidx.compose.material3.FloatingToolbarDefaults.floatingToolbarVerticalNestedScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -120,6 +118,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.ViewModule
+import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material.icons.rounded.Widgets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -423,7 +422,7 @@ fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val navController = LocalNavController.current
     val provider = settings.providers.find { it.id == id } ?: return
-    val pager = rememberPagerState { 2 }
+    val pager = rememberPagerState { 3 }
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
     val context = LocalContext.current
@@ -588,6 +587,30 @@ fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .then(
+                                        if (pager.currentPage == 2)
+                                            Modifier.background(MaterialTheme.colorScheme.primaryContainer)
+                                        else Modifier.clickable {
+                                            haptics.perform(me.rerere.rikkahub.ui.hooks.HapticPattern.Tick)
+                                            scope.launch { pager.animateScrollToPage(2) }
+                                        }
+                                    )
+                                    .padding(12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.VpnKey,
+                                    contentDescription = stringResource(R.string.setting_provider_page_proxy),
+                                    tint = if (pager.currentPage == 2)
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -634,6 +657,13 @@ fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                             provider = provider,
                             onEdit = onEdit,
                             contentPadding = contentPadding
+                        )
+                    }
+
+                    page == 2 -> {
+                        SettingProviderProxyPage(
+                            provider = provider,
+                            onEdit = onEdit
                         )
                     }
                 }
@@ -1096,8 +1126,8 @@ private fun ModelList(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp)
-                .offset(y = -ScreenOffset),
+                .navigationBarsPadding()
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

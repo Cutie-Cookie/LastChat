@@ -831,6 +831,13 @@
     <string name="setting_provider_page_proxy_password">Password (Optional)</string>
     <string name="setting_provider_page_proxy_port">Port</string>
     <string name="setting_provider_page_proxy_username">Username (Optional)</string>
+    <string name="setting_provider_page_proxy">Proxy</string>
+    <string name="setting_provider_page_proxy_desc">Route this provider\'s requests (including model fetching) through a proxy. Everything else stays direct.</string>
+    <string name="setting_provider_page_proxy_type_http">HTTP</string>
+    <string name="setting_provider_page_proxy_type_socks5">SOCKS5</string>
+    <string name="setting_provider_page_proxy_test">Test Connection</string>
+    <string name="setting_provider_page_proxy_test_ok">Proxy reachable</string>
+    <string name="setting_provider_page_proxy_test_fail">Failed: %1$s</string>
     <string name="setting_provider_page_qr_decode_failed">QR decode failed: %s</string>
     <string name="setting_provider_page_reasoning">Reasoning</string>
     <string name="setting_provider_page_reasoning_format">Reasoning format</string>

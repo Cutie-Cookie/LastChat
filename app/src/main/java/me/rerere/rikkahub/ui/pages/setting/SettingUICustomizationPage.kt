@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -335,7 +336,9 @@ fun SettingUICustomizationPage(vm: SettingVM = koinViewModel()) {
             }
 
             // Global UI Scale (whole interface size)
+            // Draft while dragging: only commit (recreate Density -> full recompose) on release, so sliding never lags
             item {
+                var uiScaleDraft by remember(displaySetting.uiScale) { mutableFloatStateOf(displaySetting.uiScale) }
                 SettingsGroup(
                     title = stringResource(R.string.setting_ui_scale_title)
                 ) {
@@ -348,9 +351,10 @@ fun SettingUICustomizationPage(vm: SettingVM = koinViewModel()) {
                     ) {
                         Text(stringResource(R.string.setting_ui_scale_small))
                         Slider(
-                            value = displaySetting.uiScale,
-                            onValueChange = {
-                                updateDisplaySetting(displaySetting.copy(uiScale = it))
+                            value = uiScaleDraft,
+                            onValueChange = { uiScaleDraft = it },
+                            onValueChangeFinished = {
+                                updateDisplaySetting(displaySetting.copy(uiScale = uiScaleDraft))
                             },
                             valueRange = 0.7f..1.2f,
                             steps = 9,
@@ -359,7 +363,7 @@ fun SettingUICustomizationPage(vm: SettingVM = koinViewModel()) {
                         Text(stringResource(R.string.setting_ui_scale_large))
                     }
                     Text(
-                        text = stringResource(R.string.setting_ui_scale_value, (displaySetting.uiScale * 100).toInt()),
+                        text = stringResource(R.string.setting_ui_scale_value, (uiScaleDraft * 100).toInt()),
                         style = LocalTextStyle.current,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )

@@ -21,7 +21,9 @@ data class PlatformHttpProxy(
     val host: String,
     val port: Int,
     val username: String? = null,
-    val password: String? = null
+    val password: String? = null,
+    /** "http" (default) or "socks5" */
+    val type: String = "http",
 )
 
 sealed class PlatformServerEvent {

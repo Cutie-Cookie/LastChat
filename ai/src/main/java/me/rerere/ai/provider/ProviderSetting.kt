@@ -19,6 +19,66 @@ sealed class ProviderProxy {
         val username: String? = null,
         val password: String? = null,
     ) : ProviderProxy()
+
+    @Serializable
+    @SerialName("socks5")
+    data class Socks5(
+        val address: String,
+        val port: Int,
+        val username: String? = null,
+        val password: String? = null,
+    ) : ProviderProxy()
+
+    companion object {
+        /**
+         * Parse a proxy URL like "http://host:port", "socks5://user:pass@host:port" or bare "host:port".
+         * Returns null when blank/unparseable.
+         */
+        fun fromUrl(raw: String): ProviderProxy? {
+            val trimmed = raw.trim()
+            if (trimmed.isEmpty()) return null
+            val schemeRegex = Regex("^(https?|socks5?)://", RegexOption.IGNORE_CASE)
+            val schemeMatch = schemeRegex.find(trimmed)
+            val scheme = schemeMatch?.groupValues?.get(1)?.lowercase() ?: "http"
+            val rest = if (schemeMatch != null) trimmed.substring(schemeMatch.value.length) else trimmed
+            val hostPort = rest.substringBeforeLast('@').substringAfterLast('/')
+            val credentials = if ('@' in rest) rest.substringBeforeLast('@') else null
+            val host = hostPort.substringBefore(':')
+            val port = hostPort.substringAfter(':', "").toIntOrNull() ?: return null
+            if (host.isEmpty()) return null
+            val username = credentials?.substringBefore(':')?.takeIf { it.isNotEmpty() }
+            val password = credentials?.substringAfter(':', "")?.takeIf { it.isNotEmpty() }
+            return when (scheme) {
+                "socks5", "socks" -> Socks5(host, port, username, password)
+                else -> Http(host, port, username, password)
+            }
+        }
+    }
+
+    fun toUrl(): String = when (this) {
+        None -> ""
+        is Http -> buildString {
+            append("http://")
+            if (!username.isNullOrEmpty()) {
+                append(username)
+                if (!password.isNullOrEmpty()) append(":").append(password)
+                append("@")
+            }
+            append(address).append(":").append(port)
+        }
+        is Socks5 -> buildString {
+            append("socks5://")
+            if (!username.isNullOrEmpty()) {
+                append(username)
+                if (!password.isNullOrEmpty()) append(":").append(password)
+                append("@")
+            }
+            append(address).append(":").append(port)
+        }
+    }
+
+    val isEmpty: Boolean
+        get() = this == None
 }
 
 @Serializable

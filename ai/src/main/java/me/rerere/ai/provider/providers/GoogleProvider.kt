@@ -1191,7 +1191,15 @@ private fun ProviderProxy.toPlatformProxy(): PlatformHttpProxy? {
             host = address,
             port = port,
             username = username,
-            password = password
+            password = password,
+            type = "http",
+        )
+        is ProviderProxy.Socks5 -> PlatformHttpProxy(
+            host = address,
+            port = port,
+            username = username,
+            password = password,
+            type = "socks5",
         )
     }
 }
