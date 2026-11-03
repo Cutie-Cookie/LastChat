@@ -276,3 +276,131 @@ class ComfyUIProvider(
         )
     }
 }
+
+    private fun String.withQueryParameters(vararg params: Pair<String, String>): String {
+        return buildString {
+            append(this@withQueryParameters)
+            params.forEachIndexed { index, (name, value) ->
+                append(if (index == 0) '?' else '&')
+                append(name.urlEncode())
+                append('=')
+                append(value.urlEncode())
+            }
+        }
+    }
+
+    private fun PlatformHttpResponse.header(name: String): String? {
+        return headers.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }
+            ?.value
+            ?.firstOrNull()
+    }
+
+    private fun JsonObject.findModelNodeId(): String? {
+        return findNodeIdWithInput(
+            inputNames = listOf("ckpt_name", "model_name"),
+            preferredClassNames = listOf("CheckpointLoader", "CheckpointLoaderSimple", "UNETLoader"),
+        )
+    }
+
+    private fun JsonObject.findTextPromptNodeId(): String? {
+        return findNodeIdWithInput(
+            inputNames = listOf("text", "prompt", "positive"),
+            preferredClassNames = listOf("CLIPTextEncode", "TextEncode"),
+            avoidTitleTokens = listOf("negative"),
+        )
+    }
+
+    private fun JsonObject.findNodeIdWithInput(
+        inputNames: List<String>,
+        preferredClassNames: List<String>,
+        avoidTitleTokens: List<String> = emptyList(),
+    ): String? {
+        val candidates = entries.mapNotNull { (nodeId, element) ->
+            val node = element as? JsonObject ?: return@mapNotNull null
+            val inputs = node["inputs"] as? JsonObject ?: return@mapNotNull null
+            if (inputNames.none { inputs.containsKey(it) }) return@mapNotNull null
+            nodeId to node
+        }.filterNot { (_, node) ->
+            val title = node.nodeTitle().lowercase()
+            avoidTitleTokens.any { title.contains(it) }
+        }
+
+        return candidates.firstOrNull { (_, node) ->
+            val classType = node["class_type"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            preferredClassNames.any { classType.contains(it, ignoreCase = true) }
+        }?.first ?: candidates.firstOrNull()?.first
+    }
+
+    private fun JsonObject.nodeTitle(): String {
+        val meta = this["_meta"] as? JsonObject
+        return meta?.get("title")?.jsonPrimitive?.contentOrNull.orEmpty()
+    }
+
+    private fun JsonObject.setNodeInput(
+        nodeId: String,
+        inputName: String,
+        value: JsonElement,
+    ): JsonObject {
+        val node = this[nodeId] as? JsonObject ?: error("ComfyUI workflow node '$nodeId' was not found")
+        val inputs = node["inputs"] as? JsonObject ?: error("ComfyUI workflow node '$nodeId' has no inputs")
+        val updatedInputs = JsonObject(inputs.toMutableMap().apply { put(inputName, value) })
+        val updatedNode = JsonObject(node.toMutableMap().apply { put("inputs", updatedInputs) })
+        return JsonObject(toMutableMap().apply { put(nodeId, updatedNode) })
+    }
+
+    private fun JsonObject.applyAspectRatio(aspectRatio: ImageAspectRatio): JsonObject {
+        val (width, height) = when (aspectRatio) {
+            ImageAspectRatio.SQUARE -> 1024 to 1024
+            ImageAspectRatio.LANDSCAPE -> 1216 to 832
+            ImageAspectRatio.PORTRAIT -> 832 to 1216
+        }
+        val targetNodeId = entries.firstOrNull { (_, element) ->
+            val inputs = (element as? JsonObject)?.get("inputs") as? JsonObject
+            inputs?.containsKey("width") == true && inputs.containsKey("height")
+        }?.key ?: return this
+
+        return setNodeInput(targetNodeId, "width", JsonPrimitive(width))
+            .setNodeInput(targetNodeId, "height", JsonPrimitive(height))
+    }
+
+    private fun JsonObject.applyCustomBody(body: CustomBody): JsonObject {
+        val key = body.key.trim()
+        if (key.isBlank()) return this
+        val path = key.split('.').filter { it.isNotBlank() }
+        if (path.size >= 3 && path[1] == "inputs") {
+            return setNodeInput(path[0], path.drop(2).joinToString("."), body.value)
+        }
+        if (path.size == 2) {
+            return setNodeInput(path[0], path[1], body.value)
+        }
+        if (path.size == 1) {
+            return setAllInputsNamed(path[0], body.value)
+        }
+        return this
+    }
+
+    private fun JsonObject.setAllInputsNamed(inputName: String, value: JsonElement): JsonObject {
+        var updated = this
+        entries.forEach { (nodeId, element) ->
+            val inputs = (element as? JsonObject)?.get("inputs") as? JsonObject
+            if (inputs?.containsKey(inputName) == true) {
+                updated = updated.setNodeInput(nodeId, inputName, coerceLikeExisting(inputs[inputName], value))
+            }
+        }
+        return updated
+    }
+
+    private fun coerceLikeExisting(existing: JsonElement?, replacement: JsonElement): JsonElement {
+        if (existing !is JsonPrimitive || replacement !is JsonPrimitive) return replacement
+        if (!existing.isString) {
+            replacement.intOrNull?.let { return JsonPrimitive(it) }
+            replacement.contentOrNull?.toFloatOrNull()?.let { return JsonPrimitive(it) }
+        }
+        return replacement
+    }
+
+    private companion object {
+        const val HISTORY_POLL_ATTEMPTS = 240
+        const val HISTORY_POLL_DELAY_MS = 500L
+    }
+}
