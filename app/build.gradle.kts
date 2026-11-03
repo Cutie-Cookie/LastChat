@@ -76,7 +76,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "lastchat.rikkafork.cocolal"
+        applicationId = "dev.keepinitkrispy.lastnap"
         minSdk = 28
         targetSdk = 36
         versionCode = 41
