@@ -457,8 +457,8 @@ class LocalTools(
         )
     }
 
-    val imageGenerationTool by lazy {
-        Tool(
+    private fun imageGenerationTool(modelSupportsVision: Boolean): Tool {
+        return Tool(
             name = "generate_image",
             description = "Generate an image with LastChat's selected image generation model and save it to the image gallery. Use this only when the user asks for an image. Improve vague user requests into a concrete visual prompt before calling.",
             parameters = {
@@ -806,7 +806,7 @@ class LocalTools(
             tools.add(askUserTool)
         }
         if (options.contains(LocalToolOption.ImageGeneration)) {
-            tools.add(imageGenerationTool)
+            tools.add(imageGenerationTool(modelSupportsVision))
         }
         return tools
     }
