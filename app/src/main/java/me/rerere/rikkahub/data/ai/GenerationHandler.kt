@@ -292,7 +292,7 @@ internal suspend fun backfillGeneratedImageInspections(
                     }
                     part.inspectedImages.forEach { img ->
                         if (img.url.isBlank()) return@forEach
-                        val markdownImage = img.markdownImage.ifBlank { "![Generated image](${img.url})" }
+                        val markdownImage = img.markdownImage.orEmpty().ifBlank { "![Generated image](${img.url})" }
                         if (markdownImage !in existingOcrMarkdown) {
                             add(markdownImage to img.url)
                         }
