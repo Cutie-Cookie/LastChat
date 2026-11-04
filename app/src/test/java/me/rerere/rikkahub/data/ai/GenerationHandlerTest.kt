@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.Tool
 import me.rerere.ai.provider.CustomBody
@@ -248,5 +249,136 @@ class GenerationHandlerTest {
         assertTrue(text.contains("Title: \"Golden Gate Bridge\"."))
         assertTrue(text.contains("Source/Path: https://example.com/bridge.jpg."))
         assertTrue(text.contains("If you want the user to see this image, embed it in your reply using: ![Golden Gate Bridge](https://example.com/bridge.jpg)"))
+    }
+
+    private fun generatedImageToolResult(
+        uris: List<String>,
+        toolName: String = "generate_image",
+        inspectedImages: List<me.rerere.ai.ui.ToolResultImage> = emptyList(),
+    ): UIMessagePart.ToolResult = UIMessagePart.ToolResult(
+        toolCallId = "gen_${toolName}_${uris.size}",
+        toolName = toolName,
+        content = buildJsonObject {
+            put("success", JsonPrimitive(true))
+            put(
+                "images",
+                JsonArray(
+                    uris.map { uri ->
+                        buildJsonObject {
+                            put("uri", JsonPrimitive(uri))
+                            put("path", JsonPrimitive(uri))
+                            put("markdown_image", JsonPrimitive("![Generated image]($uri)"))
+                        }
+                    }
+                )
+            )
+        },
+        arguments = buildJsonObject { },
+        inspectedImages = inspectedImages,
+    )
+
+    @Test
+    fun backfillGeneratedImageInspections_disabledIsStrictNoop() {
+        val messages = listOf(
+            UIMessage(role = MessageRole.TOOL, parts = listOf(generatedImageToolResult(listOf("file:///images/gen_0.png")))),
+        )
+
+        val result = backfillGeneratedImageInspections(
+            messages = messages,
+            enabled = false,
+            supportsVision = true,
+        )
+
+        assertEquals(messages, result)
+    }
+
+    @Test
+    fun backfillGeneratedImageInspections_attachesImagesWhenEnabled() {
+        val messages = listOf(
+            UIMessage(
+                role = MessageRole.TOOL,
+                parts = listOf(
+                    generatedImageToolResult(listOf("file:///images/gen_0.png", "file:///images/gen_1.png")),
+                ),
+            ),
+        )
+
+        val backfilled = backfillGeneratedImageInspections(
+            messages = messages,
+            enabled = true,
+            supportsVision = true,
+        )
+
+        val result = backfilled[0].parts[0] as UIMessagePart.ToolResult
+        assertEquals(2, result.inspectedImages.size)
+        assertEquals("file:///images/gen_0.png", result.inspectedImages[0].url)
+        assertEquals("file:///images/gen_1.png", result.inspectedImages[1].url)
+        assertEquals("![Generated image](file:///images/gen_0.png)", result.inspectedImages[0].markdownImage)
+        assertEquals("generate_image", result.inspectedImages[0].originTool)
+        assertTrue((result.content as JsonObject).containsKey("_notice_to_assistant"))
+    }
+
+    @Test
+    fun backfillGeneratedImageInspections_isIdempotentAndSkipsOtherTools() {
+        val alreadyAttached = listOf(
+            me.rerere.ai.ui.ToolResultImage(
+                url = "file:///images/gen_0.png",
+                mimeType = "image/png",
+                markdownImage = "![Generated image](file:///images/gen_0.png)",
+                originTool = "generate_image",
+            ),
+        )
+        val messages = listOf(
+            UIMessage(
+                role = MessageRole.TOOL,
+                parts = listOf(
+                    generatedImageToolResult(
+                        uris = listOf("file:///images/gen_0.png", "file:///images/gen_1.png"),
+                        inspectedImages = alreadyAttached,
+                    ),
+                    generatedImageToolResult(uris = listOf("file:///images/screen_0.png"), toolName = "look_at_screen"),
+                ),
+            ),
+        )
+
+        val once = backfillGeneratedImageInspections(messages = messages, enabled = true, supportsVision = true)
+        val twice = backfillGeneratedImageInspections(messages = once, enabled = true, supportsVision = true)
+
+        val genResult = once[0].parts[0] as UIMessagePart.ToolResult
+        // gen_0 already attached → only gen_1 backfilled; second run attaches nothing new.
+        assertEquals(listOf("file:///images/gen_0.png", "file:///images/gen_1.png"), genResult.inspectedImages.map { it.url })
+        assertEquals(once, twice)
+        val lookResult = once[0].parts[1] as UIMessagePart.ToolResult
+        assertTrue(lookResult.inspectedImages.isEmpty())
+        assertFalse((lookResult.content as JsonObject).containsKey("_notice_to_assistant"))
+    }
+
+    @Test
+    fun backfillGeneratedImageInspections_nonVisionUsesOcrRunner() {
+        val messages = listOf(
+            UIMessage(
+                role = MessageRole.TOOL,
+                parts = listOf(
+                    generatedImageToolResult(listOf("file:///images/gen_0.png", "file:///images/gen_1.png")),
+                ),
+            ),
+        )
+
+        val backfilled = backfillGeneratedImageInspections(
+            messages = messages,
+            enabled = true,
+            supportsVision = false,
+            ocrRunner = { uri -> if (uri.endsWith("gen_0.png")) "hello world" else "" },
+        )
+
+        val result = backfilled[0].parts[0] as UIMessagePart.ToolResult
+        assertTrue(result.inspectedImages.isEmpty())
+        val ocrArray = (result.content as JsonObject)["generated_image_ocr"] as JsonArray
+        assertEquals(2, ocrArray.size)
+        val firstEntry = ocrArray[0] as JsonObject
+        assertEquals("hello world", firstEntry["ocr_text"]?.jsonPrimitive?.content)
+        val secondEntry = ocrArray[1] as JsonObject
+        assertFalse(secondEntry.containsKey("ocr_text"))
+        assertTrue(secondEntry.containsKey("markdown_image"))
     }
 }

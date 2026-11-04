@@ -58,9 +58,11 @@ import me.rerere.rikkahub.data.ai.tools.parseJsonElementWithRecovery
 import me.rerere.rikkahub.data.ai.tools.recoverInlineAskUserToolCall
 import me.rerere.rikkahub.data.ai.transformers.InputMessageTransformer
 import me.rerere.rikkahub.data.ai.transformers.MessageTransformer
+import me.rerere.rikkahub.data.ai.transformers.OcrTransformer
 import me.rerere.rikkahub.data.ai.transformers.OutputMessageTransformer
 import me.rerere.rikkahub.data.ai.transformers.onGenerationFinish
 import me.rerere.rikkahub.data.ai.transformers.transformInput
+import me.rerere.rikkahub.data.ai.transformers.isOcrConfigured
 import me.rerere.rikkahub.data.ai.transformers.transforms
 import me.rerere.rikkahub.data.ai.transformers.visualTransforms
 import me.rerere.rikkahub.data.datastore.SecretKeyManager
@@ -220,6 +222,96 @@ internal fun extractInjectedImagePayloads(
             result
         }
     }
+}
+
+/**
+ * Retroactively hand previously generated images to the chat model when
+ * `modelSeesGeneratedImages` is enabled. Every `generate_image` tool result persists its
+ * saved file URIs in `images[]`, so results created while the toggle was off can still be
+ * delivered later — exactly like user-attached images:
+ * - Vision models: URIs are attached to `ToolResult.inspectedImages` (the private inspection
+ *   channel every provider understands).
+ * - Non-vision models: OCR text is appended to the tool result content as
+ *   `generated_image_ocr[]` (same shape the tool itself produces), when [ocrRunner] yields text.
+ * Idempotent: URIs already present in `inspectedImages` are skipped. When [enabled] is false
+ * this is a strict no-op — the model neither sees nor is counted for generated images.
+ * This is a request-copy transform: it is never persisted, so toggling the setting off again
+ * returns the conversation to the plain "model cannot see generated images" state.
+ */
+internal suspend fun backfillGeneratedImageInspections(
+    messages: List<UIMessage>,
+    enabled: Boolean,
+    supportsVision: Boolean,
+    ocrRunner: (suspend (String) -> String?)? = null,
+): List<UIMessage> {
+    if (!enabled) return messages
+    var changed = false
+    val updated = messages.map { message ->
+        if (message.role != MessageRole.TOOL) return@map message
+        var messageChanged = false
+        val newParts = message.parts.map { part ->
+            if (part !is UIMessagePart.ToolResult || part.toolName != "generate_image") return@map part
+            val content = part.content as? JsonObject ?: return@map part
+            val imagesArray = content["images"] as? JsonArray ?: return@map part
+            val knownUrls = part.inspectedImages.mapTo(mutableSetOf()) { it.url }
+            val newImages = mutableListOf<me.rerere.ai.ui.ToolResultImage>()
+            val ocrEntries = mutableListOf<JsonObject>()
+            imagesArray.forEach { element ->
+                val obj = element as? JsonObject ?: return@forEach
+                val uri = obj["uri"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@forEach
+                if (uri in knownUrls) return@forEach
+                val markdownImage = obj["markdown_image"]?.jsonPrimitive?.contentOrNull
+                    ?: "![Generated image]($uri)"
+                if (supportsVision) {
+                    newImages += me.rerere.ai.ui.ToolResultImage(
+                        url = uri,
+                        mimeType = "image/png",
+                        title = "Generated image ${newImages.size + 1}",
+                        markdownImage = markdownImage,
+                        originTool = "generate_image",
+                    )
+                } else {
+                    val ocrText = ocrRunner
+                        ?.let { runCatching { it(uri) }.getOrNull() }
+                        ?.trim()
+                        .orEmpty()
+                    ocrEntries += buildJsonObject {
+                        put("index", JsonPrimitive(ocrEntries.size + 1))
+                        put("markdown_image", JsonPrimitive(markdownImage))
+                        if (ocrText.isNotBlank()) {
+                            put("ocr_text", JsonPrimitive(ocrText))
+                        }
+                    }
+                }
+            }
+            if (newImages.isEmpty() && ocrEntries.isEmpty()) return@map part
+            messageChanged = true
+            val contentMap = content.toMutableMap()
+            if (newImages.isNotEmpty()) {
+                contentMap["_notice_to_assistant"] = JsonPrimitive(
+                    "Previously generated images are re-attached for your private visual inspection only. The user CANNOT see these copies and DID NOT upload them. If the user should see an image, output its markdown syntax (e.g. ![title](url)) in your reply.",
+                )
+                part.copy(
+                    content = JsonObject(contentMap),
+                    inspectedImages = part.inspectedImages + newImages,
+                )
+            } else {
+                val existingOcr = contentMap["generated_image_ocr"] as? JsonArray ?: JsonArray(emptyList())
+                contentMap["generated_image_ocr"] = JsonArray(existingOcr + ocrEntries)
+                contentMap["note"] = JsonPrimitive(
+                    "generated_image_ocr[] contains the OCR text of each generated image (this model cannot view images directly). Include images[].markdown_image in your reply so the generated image appears in chat.",
+                )
+                part.copy(content = JsonObject(contentMap))
+            }
+        }
+        if (messageChanged) {
+            changed = true
+            message.copy(parts = newParts)
+        } else {
+            message
+        }
+    }
+    return if (changed) updated else messages
 }
 
 internal fun extractInjectedImageParts(
@@ -1797,10 +1889,25 @@ class GenerationHandler(
         contextUsageSourceKey: Int? = null,
         contextBudgetScale: Double = 1.0,
     ) {
+        // Backfill generated images on the REQUEST COPY only (never persisted): with the
+        // toggle ON, every generated image from this conversation is handed to the model
+        // exactly like a user attachment (vision: inspection images; non-vision: OCR text).
+        // Toggle OFF → strict no-op, the model never sees or counts them.
+        val ocrRunner: (suspend (String) -> String?)? = if (isOcrConfigured(settings)) {
+            { uri -> OcrTransformer.performOcr(UIMessagePart.Image(url = uri)) }
+        } else {
+            null
+        }
+        val backfilledMessages = backfillGeneratedImageInspections(
+            messages = messages,
+            enabled = settings.displaySetting.modelSeesGeneratedImages,
+            supportsVision = model.inputModalities.contains(Modality.IMAGE),
+            ocrRunner = ocrRunner,
+        )
         val buildResult = buildMessages(
             assistant = assistant,
             settings = settings,
-            messages = messages,
+            messages = backfilledMessages,
             model = model,
             tools = tools,
             memories = memories,

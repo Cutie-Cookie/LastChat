@@ -56,6 +56,7 @@ internal fun contextUsageSourceKey(
     settings.searchCommonOptions,
     settings.searchServiceSelected,
     settings.assistantOverlayConfig,
+    settings.displaySetting.modelSeesGeneratedImages,
     settings.providers,
     model.id,
     model.modelId,
