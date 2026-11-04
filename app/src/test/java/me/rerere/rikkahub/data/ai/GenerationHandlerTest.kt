@@ -381,4 +381,82 @@ class GenerationHandlerTest {
         assertFalse(secondEntry.containsKey("ocr_text"))
         assertTrue(secondEntry.containsKey("markdown_image"))
     }
+
+    @Test
+    fun backfillGeneratedImageInspections_nonVisionDoesNotDuplicateExistingOcr() {
+        val toolResult = generatedImageToolResult(listOf("file:///images/gen_0.png")).copy(
+            content = buildJsonObject {
+                put("success", JsonPrimitive(true))
+                put(
+                    "images",
+                    JsonArray(
+                        listOf(
+                            buildJsonObject {
+                                put("uri", JsonPrimitive("file:///images/gen_0.png"))
+                                put("markdown_image", JsonPrimitive("![Generated image](file:///images/gen_0.png)"))
+                            }
+                        )
+                    )
+                )
+                put(
+                    "generated_image_ocr",
+                    JsonArray(
+                        listOf(
+                            buildJsonObject {
+                                put("index", JsonPrimitive(1))
+                                put("markdown_image", JsonPrimitive("![Generated image](file:///images/gen_0.png)"))
+                                put("ocr_text", JsonPrimitive("already here"))
+                            }
+                        )
+                    )
+                )
+            },
+        )
+        val messages = listOf(UIMessage(role = MessageRole.TOOL, parts = listOf(toolResult)))
+
+        val backfilled = backfillGeneratedImageInspections(
+            messages = messages,
+            enabled = true,
+            supportsVision = false,
+            ocrRunner = { "should not run" },
+        )
+
+        assertEquals(messages, backfilled)
+    }
+
+    @Test
+    fun backfillGeneratedImageInspections_nonVisionWithholdsPersistedImageUrls() {
+        val persisted = listOf(
+            me.rerere.ai.ui.ToolResultImage(
+                url = "file:///images/gen_0.png",
+                mimeType = "image/png",
+                markdownImage = "![Generated image](file:///images/gen_0.png)",
+                originTool = "generate_image",
+            ),
+        )
+        val messages = listOf(
+            UIMessage(
+                role = MessageRole.TOOL,
+                parts = listOf(
+                    generatedImageToolResult(
+                        uris = listOf("file:///images/gen_0.png"),
+                        inspectedImages = persisted,
+                    ),
+                ),
+            ),
+        )
+
+        val backfilled = backfillGeneratedImageInspections(
+            messages = messages,
+            enabled = true,
+            supportsVision = false,
+            ocrRunner = { "seen before" },
+        )
+
+        val result = backfilled[0].parts[0] as UIMessagePart.ToolResult
+        assertTrue(result.inspectedImages.all { it.url.isEmpty() })
+        val ocrArray = (result.content as JsonObject)["generated_image_ocr"] as JsonArray
+        assertEquals(1, ocrArray.size)
+        assertEquals("seen before", (ocrArray[0] as JsonObject)["ocr_text"]?.jsonPrimitive?.content)
+    }
 }

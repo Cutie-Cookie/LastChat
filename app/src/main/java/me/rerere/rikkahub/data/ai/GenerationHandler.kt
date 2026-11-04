@@ -256,27 +256,55 @@ internal suspend fun backfillGeneratedImageInspections(
             val knownUrls = part.inspectedImages.mapTo(mutableSetOf()) { it.url }
             val newImages = mutableListOf<me.rerere.ai.ui.ToolResultImage>()
             val ocrEntries = mutableListOf<JsonObject>()
-            imagesArray.forEach { element ->
-                val obj = element as? JsonObject ?: return@forEach
-                val uri = obj["uri"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@forEach
-                if (uri in knownUrls) return@forEach
-                val markdownImage = obj["markdown_image"]?.jsonPrimitive?.contentOrNull
-                    ?: "![Generated image]($uri)"
-                if (supportsVision) {
+            if (supportsVision) {
+                imagesArray.forEach { element ->
+                    val obj = element as? JsonObject ?: return@forEach
+                    val uri = obj["uri"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@forEach
+                    if (uri in knownUrls) return@forEach
                     newImages += me.rerere.ai.ui.ToolResultImage(
                         url = uri,
                         mimeType = "image/png",
                         title = "Generated image ${newImages.size + 1}",
-                        markdownImage = markdownImage,
+                        markdownImage = obj["markdown_image"]?.jsonPrimitive?.contentOrNull
+                            ?: "![Generated image]($uri)",
                         originTool = "generate_image",
                     )
-                } else {
-                    val ocrText = ocrRunner
-                        ?.let { runCatching { it(uri) }.getOrNull() }
+                }
+            } else {
+                // Non-vision: never deliver image bytes to the provider. OCR anything not
+                // already OCR'd — both images[] entries produced without an OCR block (toggle
+                // was off at generation time) and inspection images persisted by an earlier
+                // vision-model turn. Dedup by markdown link so OCR the tool already wrote
+                // in the same turn is never duplicated.
+                val existingOcr = content["generated_image_ocr"] as? JsonArray ?: JsonArray(emptyList())
+                val existingOcrMarkdown = existingOcr
+                    .mapNotNull { (it as? JsonObject)?.get("markdown_image")?.jsonPrimitive?.contentOrNull }
+                    .toSet()
+                val ocrCandidates = buildList {
+                    imagesArray.forEach { element ->
+                        val obj = element as? JsonObject ?: return@forEach
+                        val uri = obj["uri"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                        val markdownImage = obj["markdown_image"]?.jsonPrimitive?.contentOrNull
+                            ?: "![Generated image]($uri)"
+                        if (markdownImage !in existingOcrMarkdown) {
+                            add(markdownImage to uri)
+                        }
+                    }
+                    part.inspectedImages.forEach { img ->
+                        if (img.url.isBlank()) return@forEach
+                        val markdownImage = img.markdownImage.ifBlank { "![Generated image](${img.url})" }
+                        if (markdownImage !in existingOcrMarkdown) {
+                            add(markdownImage to img.url)
+                        }
+                    }
+                }
+                ocrCandidates.forEachIndexed { index, (markdownImage, uri) ->
+                    val ocrText = uri.takeIf { it.isNotBlank() }
+                        ?.let { target -> ocrRunner?.let { runCatching { it(target) }.getOrNull() } }
                         ?.trim()
                         .orEmpty()
                     ocrEntries += buildJsonObject {
-                        put("index", JsonPrimitive(ocrEntries.size + 1))
+                        put("index", JsonPrimitive(existingOcr.size + index + 1))
                         put("markdown_image", JsonPrimitive(markdownImage))
                         if (ocrText.isNotBlank()) {
                             put("ocr_text", JsonPrimitive(ocrText))
@@ -284,24 +312,40 @@ internal suspend fun backfillGeneratedImageInspections(
                     }
                 }
             }
-            if (newImages.isEmpty() && ocrEntries.isEmpty()) return@map part
-            messageChanged = true
-            val contentMap = content.toMutableMap()
-            if (newImages.isNotEmpty()) {
-                contentMap["_notice_to_assistant"] = JsonPrimitive(
-                    "Previously generated images are re-attached for your private visual inspection only. The user CANNOT see these copies and DID NOT upload them. If the user should see an image, output its markdown syntax (e.g. ![title](url)) in your reply.",
-                )
-                part.copy(
-                    content = JsonObject(contentMap),
-                    inspectedImages = part.inspectedImages + newImages,
-                )
-            } else {
-                val existingOcr = contentMap["generated_image_ocr"] as? JsonArray ?: JsonArray(emptyList())
-                contentMap["generated_image_ocr"] = JsonArray(existingOcr + ocrEntries)
-                contentMap["note"] = JsonPrimitive(
-                    "generated_image_ocr[] contains the OCR text of each generated image (this model cannot view images directly). Include images[].markdown_image in your reply so the generated image appears in chat.",
-                )
-                part.copy(content = JsonObject(contentMap))
+            when {
+                newImages.isNotEmpty() -> {
+                    messageChanged = true
+                    val contentMap = content.toMutableMap()
+                    contentMap["_notice_to_assistant"] = JsonPrimitive(
+                        "Previously generated images are re-attached for your private visual inspection only. The user CANNOT see these copies and DID NOT upload them. If the user should see an image, output its markdown syntax (e.g. ![title](url)) in your reply.",
+                    )
+                    part.copy(
+                        content = JsonObject(contentMap),
+                        inspectedImages = part.inspectedImages + newImages,
+                    )
+                }
+                ocrEntries.isNotEmpty() -> {
+                    messageChanged = true
+                    val contentMap = content.toMutableMap()
+                    val existingOcr = contentMap["generated_image_ocr"] as? JsonArray ?: JsonArray(emptyList())
+                    contentMap["generated_image_ocr"] = JsonArray(existingOcr + ocrEntries)
+                    contentMap["note"] = JsonPrimitive(
+                        "generated_image_ocr[] contains the OCR text of each generated image (this model cannot view images directly). Include images[].markdown_image in your reply so the generated image appears in chat.",
+                    )
+                    // Vision-era persisted inspection images must be withheld from a
+                    // non-vision provider — this request copy carries OCR text instead.
+                    part.copy(
+                        content = JsonObject(contentMap),
+                        inspectedImages = part.inspectedImages.map { it.copy(url = "") },
+                    )
+                }
+                !supportsVision && part.inspectedImages.any { it.url.isNotBlank() } -> {
+                    // Everything already OCR'd, but persisted image URLs must still be
+                    // withheld from a non-vision provider.
+                    messageChanged = true
+                    part.copy(inspectedImages = part.inspectedImages.map { it.copy(url = "") })
+                }
+                else -> part
             }
         }
         if (messageChanged) {
