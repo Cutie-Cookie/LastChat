@@ -621,12 +621,18 @@ fun List<UIMessage>.stripEphemeralToolImagePayloads(): List<UIMessage> {
     val updated = map { message ->
         var messageChanged = false
         val newParts = message.parts.map { part ->
-            if (part is UIMessagePart.ToolResult && part.inspectedImages.any { it.url.isNotBlank() }) {
+            if (part is UIMessagePart.ToolResult && part.inspectedImages.any { it.url.startsWith("data:") }) {
                 messageChanged = true
                 changed = true
                 part.copy(
                     inspectedImages = part.inspectedImages.map { img ->
-                        if (img.url.isNotBlank()) img.copy(url = "") else img
+                        // Only base64 data: URLs are ephemeral (look_at_screen screenshots,
+                        // downloaded search images) — blanking them keeps huge payloads out of
+                        // the database. File-backed URLs (e.g. generate_image saves to
+                        // app-internal storage) are small and persistent: keep them so the
+                        // model keeps seeing the image on later turns and context accounting
+                        // counts it in the usage panel (image count + Media tokens).
+                        if (img.url.startsWith("data:")) img.copy(url = "") else img
                     }
                 )
             } else {

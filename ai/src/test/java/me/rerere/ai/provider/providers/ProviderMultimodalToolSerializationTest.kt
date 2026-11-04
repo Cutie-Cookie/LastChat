@@ -639,4 +639,48 @@ class ProviderMultimodalToolSerializationTest {
         assertEquals("image/png", img.mimeType)
         assertEquals("search_web", img.originTool)
     }
+
+    @Test
+    fun stripEphemeralToolImagePayloads_preservesFileBackedUrls() {
+        val messages = listOf(
+            UIMessage(
+                role = MessageRole.TOOL,
+                parts = listOf(
+                    UIMessagePart.ToolResult(
+                        toolCallId = "c1",
+                        toolName = "generate_image",
+                        content = buildJsonObject { },
+                        arguments = buildJsonObject { },
+                        inspectedImages = listOf(
+                            ToolResultImage(
+                                url = "file:///data/user/0/app/files/images/123_model_tool_0.png",
+                                mimeType = "image/png",
+                                title = "Generated image",
+                                markdownImage = "![Generated image](file:///data/user/0/app/files/images/123_model_tool_0.png)",
+                                originTool = "generate_image",
+                            ),
+                            ToolResultImage(
+                                url = "data:image/png;base64,AAA",
+                                mimeType = "image/png",
+                                originTool = "look_at_screen",
+                            ),
+                        ),
+                    )
+                )
+            )
+        )
+
+        val stripped = messages.stripEphemeralToolImagePayloads()
+        val result = stripped[0].parts[0] as UIMessagePart.ToolResult
+        assertEquals(
+            "File-backed inspection images must survive the strip (persistence + usage counting)",
+            "file:///data/user/0/app/files/images/123_model_tool_0.png",
+            result.inspectedImages[0].url,
+        )
+        assertEquals(
+            "Base64 data: URLs must still be blanked (ephemeral payloads)",
+            "",
+            result.inspectedImages[1].url,
+        )
+    }
 }

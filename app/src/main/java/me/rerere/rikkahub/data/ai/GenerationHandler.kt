@@ -1844,7 +1844,16 @@ class GenerationHandler(
                 conversationTokens = (usage.conversationTokens + delta).coerceAtLeast(0),
                 usedTokens = (usage.usedTokens + delta).coerceAtLeast(0),
                 imageCount = internalMessages.sumOf { message ->
-                    message.parts.count { it is UIMessagePart.Image }
+                    message.parts.sumOf { part ->
+                        when (part) {
+                            is UIMessagePart.Image -> 1
+                            // Tool-inspected images (generate_image, look_at_screen, search
+                            // results) are real context for the model — count them like
+                            // attachments so the usage panel shows the true image count.
+                            is UIMessagePart.ToolResult -> part.inspectedImages.count { it.url.isNotBlank() }
+                            else -> 0
+                        }
+                    }
                 },
             )
         }
